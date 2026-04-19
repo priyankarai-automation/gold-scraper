@@ -1,9 +1,0 @@
-{
-  "name": "gold-rate-scraper",
-  "version": "1.0.0",
-  "description": "Scrapes Delhi & Malaysia retail 22KT gold rates. Deploy on Vercel.",
-  "private": true,
-  "engines": {
-    "node": ">=18"
-  }
-}
