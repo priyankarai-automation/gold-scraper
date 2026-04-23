@@ -199,9 +199,8 @@
 <script>
 /* =====================================================
    22KT Gold Tracker — Single-file version
-   Uses free gold-api.com for LIVE spot price + historical.
-   Delhi 22KT retail rate ≈ spot × 0.916 × INR rate × 1.05 (jeweller markup)
-   Malaysia 22KT retail rate ≈ spot × 0.916 × MYR rate × 1.04
+   TODAY: Uses /api/rates for ACTUAL scraped retail prices.
+   HISTORICAL: Falls back to spot-based estimation.
    ===================================================== */
 
 const TODAY_ISO = () => new Date().toISOString().slice(0, 10);
@@ -217,7 +216,7 @@ const UNITS = [
   { label: '1 kilogram', mul: 1000 },
 ];
 
-// Small city markup variation (based on observed retail differences)
+// Relative city adjustments vs Delhi (used to derive other cities from actual Delhi rate)
 const CITY_MARKUPS = {
   delhi:     1.052,
   mumbai:    1.048,
@@ -227,7 +226,7 @@ const CITY_MARKUPS = {
   kolkata:   1.051,
 };
 
-const MY_MARKUP = 1.040; // Malaysia retail over spot
+const MY_MARKUP = 1.040; // Malaysia retail over spot (for historical fallback)
 const PURITY_22K = 0.916667;
 const GRAMS_PER_OZ = 31.1035;
 
@@ -269,23 +268,26 @@ function resetToToday() {
 
 /* =========================================================
    DATA FETCHING
-   Uses gold-api.com (free, CORS-enabled, no key) for spot price
-   Uses open.er-api.com for FX rates
+   TODAY:      /api/rates → actual scraped retail prices
+   HISTORICAL: gold-api.com spot + FX → estimated retail
    ========================================================= */
 
-async function fetchGoldSpot(dateStr) {
-  // gold-api.com supports dates via ?date=YYYYMMDD
-  // For TODAY, use the simple endpoint
-  const isToday = dateStr === TODAY_ISO();
+// Fetch actual scraped rates from our backend (today only)
+async function fetchActualRates() {
+  try {
+    const res = await fetch('/api/rates');
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j.success) return null;
+    return j;
+  } catch { return null; }
+}
 
+async function fetchGoldSpot(dateStr) {
+  const isToday = dateStr === TODAY_ISO();
   const urls = isToday
-    ? [
-        'https://api.gold-api.com/price/XAU',
-      ]
-    : [
-        // Historical — gold-api.com date format
-        `https://api.gold-api.com/price/XAU/${dateStr.replace(/-/g, '')}`,
-      ];
+    ? ['https://api.gold-api.com/price/XAU']
+    : [`https://api.gold-api.com/price/XAU/${dateStr.replace(/-/g, '')}`];
 
   for (const url of urls) {
     try {
@@ -296,7 +298,6 @@ async function fetchGoldSpot(dateStr) {
     } catch {}
   }
 
-  // Fallback for historical: use fawaz community CDN
   try {
     const url = dateStr === TODAY_ISO()
       ? 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json'
@@ -314,7 +315,6 @@ async function fetchGoldSpot(dateStr) {
 async function fetchFX(dateStr) {
   const isToday = dateStr === TODAY_ISO();
 
-  // Primary: open.er-api.com (only has today)
   if (isToday) {
     try {
       const res = await fetch('https://open.er-api.com/v6/latest/USD');
@@ -323,7 +323,6 @@ async function fetchFX(dateStr) {
     } catch {}
   }
 
-  // Historical via frankfurter.app (has full history from 1999)
   try {
     const url = isToday
       ? 'https://api.frankfurter.app/latest?from=USD&to=MYR,INR'
@@ -335,7 +334,6 @@ async function fetchFX(dateStr) {
     }
   } catch {}
 
-  // Fallback
   try {
     const url = isToday
       ? 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
@@ -372,45 +370,85 @@ async function loadData() {
     ? 'Fetching live rates…'
     : `Fetching rates for ${fmtDate(dateStr)}…`;
 
-  const [goldResult, fxResult] = await Promise.all([
-    fetchGoldSpot(dateStr),
-    fetchFX(dateStr),
-  ]);
+  let useActual = false;
 
-  if (!goldResult) {
-    document.getElementById('warningText').textContent =
-      `Could not fetch gold price for ${fmtDate(dateStr)}. Try a different date or refresh.`;
-    warning.classList.remove('hidden');
-    loader.classList.add('hidden');
-    btn.disabled = false;
-    btn.textContent = '↻ Refresh';
-    return;
+  // For today: try actual scraped retail rates first
+  if (isToday) {
+    const actual = await fetchActualRates();
+    if (actual && actual.delhi && actual.malaysia && actual.fx) {
+      useActual = true;
+      const delhiINR = actual.delhi.perGramINR;
+      const myMYR = actual.malaysia.perGramMYR;
+      const fxData = actual.fx;
+
+      // Derive other city prices relative to Delhi
+      const india = {};
+      Object.keys(CITY_MARKUPS).forEach(key => {
+        india[key] = {
+          label: key.charAt(0).toUpperCase() + key.slice(1),
+          perGramINR: delhiINR * (CITY_MARKUPS[key] / CITY_MARKUPS.delhi),
+        };
+      });
+
+      cachedData = {
+        date: dateStr,
+        isLive: true,
+        isActual: true,
+        goldSpotUSD: null,
+        goldSource: actual.delhi.source,
+        fxSource: fxData.source,
+        usdToMyr: fxData.usdToMyr,
+        usdToInr: fxData.usdToInr,
+        inrToMyr: fxData.inrToMyr,
+        india,
+        malaysiaPerGramMYR: myMYR,
+        mySource: actual.malaysia.source,
+      };
+    }
   }
 
-  // Build per-city INR rates (retail = spot × purity × FX × city markup)
-  const basePerGramMYR = (goldResult.usdPerOz / GRAMS_PER_OZ) * PURITY_22K * fxResult.usdToMyr;
-  const basePerGramINR = (goldResult.usdPerOz / GRAMS_PER_OZ) * PURITY_22K * fxResult.usdToInr;
+  // Fallback: spot-based estimation (used for historical or if scraping failed)
+  if (!useActual) {
+    const [goldResult, fxResult] = await Promise.all([
+      fetchGoldSpot(dateStr),
+      fetchFX(dateStr),
+    ]);
 
-  const india = {};
-  Object.keys(CITY_MARKUPS).forEach(key => {
-    india[key] = {
-      label: key.charAt(0).toUpperCase() + key.slice(1),
-      perGramINR: basePerGramINR * CITY_MARKUPS[key],
+    if (!goldResult) {
+      document.getElementById('warningText').textContent =
+        `Could not fetch gold price for ${fmtDate(dateStr)}. Try a different date or refresh.`;
+      warning.classList.remove('hidden');
+      loader.classList.add('hidden');
+      btn.disabled = false;
+      btn.textContent = '↻ Refresh';
+      return;
+    }
+
+    const basePerGramMYR = (goldResult.usdPerOz / GRAMS_PER_OZ) * PURITY_22K * fxResult.usdToMyr;
+    const basePerGramINR = (goldResult.usdPerOz / GRAMS_PER_OZ) * PURITY_22K * fxResult.usdToInr;
+
+    const india = {};
+    Object.keys(CITY_MARKUPS).forEach(key => {
+      india[key] = {
+        label: key.charAt(0).toUpperCase() + key.slice(1),
+        perGramINR: basePerGramINR * CITY_MARKUPS[key],
+      };
+    });
+
+    cachedData = {
+      date: dateStr,
+      isLive: isToday,
+      isActual: false,
+      goldSpotUSD: goldResult.usdPerOz,
+      goldSource: goldResult.source,
+      fxSource: fxResult.source,
+      usdToMyr: fxResult.usdToMyr,
+      usdToInr: fxResult.usdToInr,
+      inrToMyr: fxResult.usdToMyr / fxResult.usdToInr,
+      india,
+      malaysiaPerGramMYR: basePerGramMYR * MY_MARKUP,
     };
-  });
-
-  cachedData = {
-    date: dateStr,
-    isLive: isToday,
-    goldSpotUSD: goldResult.usdPerOz,
-    goldSource: goldResult.source,
-    fxSource: fxResult.source,
-    usdToMyr: fxResult.usdToMyr,
-    usdToInr: fxResult.usdToInr,
-    inrToMyr: fxResult.usdToMyr / fxResult.usdToInr,
-    india,
-    malaysiaPerGramMYR: basePerGramMYR * MY_MARKUP,
-  };
+  }
 
   renderFromCache();
   btn.disabled = false;
@@ -432,15 +470,19 @@ function renderFromCache() {
   const indianINR = cityData.perGramINR;
   const myMYR = d.malaysiaPerGramMYR;
 
+  const rateType = d.isActual ? 'actual retail' : 'retail estimate';
+
   if (d.isLive) {
     dot.className = 'status-dot';
-    statusText.textContent = `Live · ${fmtDate(d.date, { weekday: 'short', day: 'numeric', month: 'short' })}`;
+    statusText.textContent = d.isActual
+      ? `Live · Actual rates · ${fmtDate(d.date, { weekday: 'short', day: 'numeric', month: 'short' })}`
+      : `Live · Estimated · ${fmtDate(d.date, { weekday: 'short', day: 'numeric', month: 'short' })}`;
   } else {
     dot.className = 'status-dot history';
-    statusText.textContent = `Historical · ${fmtDate(d.date)}`;
+    statusText.textContent = `Historical · Estimated · ${fmtDate(d.date)}`;
     info.classList.remove('hidden');
     document.getElementById('infoText').textContent =
-      `Viewing rates from ${fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`;
+      `Viewing estimated rates from ${fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`;
   }
 
   document.getElementById('thIndia').textContent = `${cityLabel} (INR)`;
@@ -456,12 +498,12 @@ function renderFromCache() {
     <div class="stat-card">
       <div class="stat-label"><span class="flag">🇮🇳</span>${cityLabel}</div>
       <div class="stat-value" style="color:#9cc3e8">₹${fmt(indianINR)}<span class="stat-unit">/g</span></div>
-      <div class="stat-sub">22KT · retail estimate</div>
+      <div class="stat-sub">22KT · ${rateType}${!d.isActual || city !== 'delhi' ? '' : ''}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label"><span class="flag">🇲🇾</span>Malaysia</div>
       <div class="stat-value" style="color:#f0b155">RM${fmt(myMYR)}<span class="stat-unit">/g</span></div>
-      <div class="stat-sub">22KT · retail estimate</div>
+      <div class="stat-sub">22KT · ${rateType}</div>
     </div>
     <div class="stat-card full">
       <div class="stat-label">Difference / gram</div>
@@ -534,10 +576,17 @@ function renderFromCache() {
     </div>`;
   }).join('');
 
-  document.getElementById('sourcesNote').textContent =
-    `Gold: ${d.goldSource} · FX: ${d.fxSource} · Retail markup applied (~5%)`;
-  document.getElementById('updatedNote').textContent =
-    `Spot: $${fmt(d.goldSpotUSD)}/oz · 1 INR = RM ${fmt(d.inrToMyr, 5)}`;
+  if (d.isActual) {
+    document.getElementById('sourcesNote').textContent =
+      `India: ${d.goldSource} · Malaysia: ${d.mySource || '—'} · FX: ${d.fxSource}`;
+    document.getElementById('updatedNote').textContent =
+      `Actual scraped retail rates · 1 INR = RM ${fmt(d.inrToMyr, 5)}`;
+  } else {
+    document.getElementById('sourcesNote').textContent =
+      `Gold: ${d.goldSource} · FX: ${d.fxSource} · Retail markup applied (~5%)`;
+    document.getElementById('updatedNote').textContent =
+      `Spot: $${fmt(d.goldSpotUSD)}/oz · 1 INR = RM ${fmt(d.inrToMyr, 5)}`;
+  }
 
   loader.classList.add('hidden');
   content.classList.remove('hidden');
