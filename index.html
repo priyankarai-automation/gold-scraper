@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a09" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="format-detection" content="telephone=no" />
+<title>22KT Gold Tracker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+  body {
+    background: #0a0a09;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: #e8e5de;
+    min-height: 100dvh;
+    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+
+  .header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; padding: 4px; }
+  .app-title { font-size: 22px; font-weight: 700; color: #f8f6f0; letter-spacing: -0.3px; }
+  .app-subtitle { font-size: 13px; color: #888780; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #97C459; flex-shrink: 0; box-shadow: 0 0 8px rgba(151,196,89,.4); animation: pulse 2s infinite; }
+  .status-dot.history { background: #85B7EB; animation: none; box-shadow: 0 0 8px rgba(133,183,235,.4); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .btn { background: linear-gradient(180deg, #1e1e1b 0%, #181816 100%); border: 0.5px solid #33332f; color: #e8e5de; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; min-height: 44px; flex-shrink: 0; touch-action: manipulation; }
+  .btn:active { transform: scale(0.96); background: #22221f; }
+  .btn:disabled { opacity: 0.5; }
+
+  .selectors { background: linear-gradient(135deg, #1c1c19 0%, #161614 100%); border: 0.5px solid #2c2c2a; border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+  .selectors-label { font-size: 11px; font-weight: 700; color: #6a6965; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .selector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-label { font-size: 11px; color: #888780; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+  .ico { font-size: 13px; }
+  input[type="date"], select.selector {
+    width: 100%; background: #0d0d0c; border: 0.5px solid #33332f;
+    border-radius: 12px; color: #f8f6f0;
+    padding: 14px; font-size: 16px; font-weight: 600;
+    font-family: inherit; min-height: 52px; cursor: pointer;
+    color-scheme: dark; -webkit-appearance: none; appearance: none;
+    touch-action: manipulation;
+  }
+  select.selector { padding-right: 38px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23c4c1b8' fill='none' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; opacity: 0.8; padding: 8px; }
+  input[type="date"]:focus, select.selector:focus { outline: none; border-color: #EF9F27; }
+  .date-helper { font-size: 11px; color: #6a6965; margin-top: 6px; line-height: 1.4; }
+  .today-btn { background: transparent; border: 0.5px solid #33332f; color: #b4b2a9; font-size: 12px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-family: inherit; margin-top: 6px; }
+  .today-btn:active { background: #22221f; }
+
+  .banner { border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.45; }
+  .banner-info { background: #0d1824; border: 0.5px solid #1a2e42; color: #9cc3e8; }
+  .banner-warning { background: #1f1a10; border: 0.5px solid #3a2e14; color: #f0b155; }
+  .banner-icon { font-size: 16px; flex-shrink: 0; }
+  .banner-text { flex: 1; font-weight: 500; }
+  .hidden { display: none !important; }
+
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: linear-gradient(180deg, #1a1a18 0%, #161614 100%); border: 0.5px solid #2c2c2a; border-radius: 14px; padding: 14px; overflow: hidden; }
+  .stat-card.full { grid-column: 1 / -1; }
+  .stat-label { font-size: 11px; color: #888780; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .flag { font-size: 15px; }
+  .stat-value { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -0.3px; overflow-wrap: break-word; }
+  .stat-unit { font-size: 13px; font-weight: 500; color: #6a6965; margin-left: 2px; }
+  .stat-sub { font-size: 12px; color: #6a6965; margin-top: 6px; font-weight: 500; }
+  .diff-secondary { font-size: 16px; color: #6a6965; font-weight: 600; margin-top: 4px; }
+
+  .table-wrap { border: 0.5px solid #2c2c2a; border-radius: 14px; overflow: hidden; background: #111110; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #1a1a18; }
+  th { padding: 14px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #888780; border-bottom: 0.5px solid #2c2c2a; white-space: nowrap; }
+  tbody tr { border-bottom: 0.5px solid #181817; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #141413; }
+  td { padding: 13px 14px; font-size: 14px; }
+  .pill { display: inline-flex; align-items: center; padding: 5px 11px; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; line-height: 1.3; }
+  .pill-my { background: #1d3512; color: #b4e080; border: 0.5px solid #2a4e1a; }
+  .pill-in { background: #1c1534; color: #c0b8f0; border: 0.5px solid #2e2756; }
+  .pill-eq { background: #1f1f1c; color: #888780; border: 0.5px solid #33332f; }
+  .pill-inr-hint { font-size: 10px; opacity: 0.85; font-weight: 500; display: block; margin-top: 1px; }
+
+  .mobile-cards { display: none; }
+  .unit-card { background: linear-gradient(180deg, #161615 0%, #121210 100%); border: 0.5px solid #2c2c2a; border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .unit-card:last-child { margin-bottom: 0; }
+  .unit-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 0.5px solid #2c2c2a; }
+  .unit-name { font-size: 16px; font-weight: 700; color: #f8f6f0; }
+  .unit-date { font-size: 11px; color: #555550; font-weight: 500; white-space: nowrap; }
+  .unit-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; gap: 12px; }
+  .unit-label { color: #888780; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .unit-value { font-weight: 700; text-align: right; word-break: break-word; font-size: 16px; }
+  .unit-diff { margin-top: 12px; padding-top: 12px; border-top: 0.5px solid #2c2c2a; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .unit-diff .pill { font-size: 13px; padding: 7px 13px; text-align: right; }
+
+  .loading { text-align: center; padding: 3rem 1rem; color: #888780; font-size: 14px; font-weight: 500; }
+  .spinner { width: 32px; height: 32px; border: 3px solid #2c2c2a; border-top-color: #EF9F27; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer { margin-top: 16px; padding: 14px; background: #111110; border: 0.5px solid #1e1e1c; border-radius: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .footer-note { font-size: 12px; color: #555550; line-height: 1.5; font-weight: 500; }
+
+  @media (max-width: 640px) {
+    body { padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+    .app-title { font-size: 19px; }
+    .btn { font-size: 13px; padding: 9px 12px; min-height: 40px; }
+    .summary { grid-template-columns: 1fr; gap: 8px; }
+    .stat-card.full { grid-column: auto; }
+    .stat-value { font-size: 26px; }
+    .diff-secondary { font-size: 18px; }
+    .table-wrap { display: none; }
+    .mobile-cards { display: block; }
+    .selector-grid { grid-template-columns: 1fr; }
+    input[type="date"], select.selector { font-size: 16px; min-height: 54px; }
+  }
+  @media (max-width: 360px) {
+    .app-title { font-size: 17px; }
+    .stat-value { font-size: 22px; }
+  }
+  @media (min-width: 641px) and (max-width: 820px) { .summary { grid-template-columns: 1fr 1fr 1fr; } .stat-card.full { grid-column: auto; } }
+  @media (min-width: 821px) { .summary { grid-template-columns: 1fr 1fr 1fr; } .stat-card.full { grid-column: auto; } .footer { flex-direction: row; justify-content: space-between; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <div class="app-title">22KT Gold Tracker</div>
+      <div class="app-subtitle">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Loading…</span>
+      </div>
+    </div>
+    <button class="btn" id="refreshBtn" onclick="loadData()">↻ Refresh</button>
+  </div>
+
+  <div class="selectors">
+    <div class="selectors-label"><span>⚙️</span> Compare settings</div>
+    <div class="selector-grid">
+      <div>
+        <label class="field-label" for="datePicker"><span class="ico">📅</span> Date</label>
+        <input type="date" id="datePicker" onchange="loadData()" />
+        <button class="today-btn" onclick="resetToToday()">↺ Today</button>
+      </div>
+      <div>
+        <label class="field-label" for="citySelect"><span class="ico">🏙️</span> Indian City</label>
+        <select class="selector" id="citySelect" onchange="renderFromCache()">
+          <option value="delhi">Delhi</option>
+          <option value="mumbai">Mumbai</option>
+          <option value="chennai">Chennai</option>
+          <option value="bangalore">Bangalore</option>
+          <option value="hyderabad">Hyderabad</option>
+          <option value="kolkata">Kolkata</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="infoBanner" class="banner banner-info hidden">
+    <span class="banner-icon">📜</span><span class="banner-text" id="infoText"></span>
+  </div>
+  <div id="warningBanner" class="banner banner-warning hidden">
+    <span class="banner-icon">⚠️</span><span class="banner-text" id="warningText"></span>
+  </div>
+
+  <div id="loader" class="loading">
+    <div class="spinner"></div>
+    <span id="loadingText">Fetching gold rates…</span>
+  </div>
+
+  <div id="content" class="hidden">
+    <div class="summary" id="summary"></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:14%">Date</th>
+            <th style="width:18%">Unit</th>
+            <th style="width:17%" id="thIndia">India (INR)</th>
+            <th style="width:17%">Malaysia (MYR)</th>
+            <th style="width:15%" id="thIndiaMyr">India in MYR</th>
+            <th style="width:19%">Difference</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="mobile-cards" id="mobileList"></div>
+    <div class="footer">
+      <span class="footer-note" id="sourcesNote">Sources: —</span>
+      <span class="footer-note" id="updatedNote">—</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================
+   22KT Gold Tracker — Single-file version
+   Uses free gold-api.com for LIVE spot price + historical.
+   Delhi 22KT retail rate ≈ spot × 0.916 × INR rate × 1.05 (jeweller markup)
+   Malaysia 22KT retail rate ≈ spot × 0.916 × MYR rate × 1.04
+   ===================================================== */
+
+const TODAY_ISO = () => new Date().toISOString().slice(0, 10);
+
+const UNITS = [
+  { label: '1 gram', mul: 1 },
+  { label: '8 grams', mul: 8 },
+  { label: '10 grams', mul: 10 },
+  { label: '1 tola', mul: 11.664 },
+  { label: '1 troy oz', mul: 31.1035 },
+  { label: '50 grams', mul: 50 },
+  { label: '100 grams', mul: 100 },
+  { label: '1 kilogram', mul: 1000 },
+];
+
+// Small city markup variation (based on observed retail differences)
+const CITY_MARKUPS = {
+  delhi:     1.052,
+  mumbai:    1.048,
+  chennai:   1.058,
+  bangalore: 1.050,
+  hyderabad: 1.049,
+  kolkata:   1.051,
+};
+
+const MY_MARKUP = 1.040; // Malaysia retail over spot
+const PURITY_22K = 0.916667;
+const GRAMS_PER_OZ = 31.1035;
+
+let cachedData = null;
+
+function fmt(n, d = 2) {
+  if (n == null || isNaN(n)) return '—';
+  return Number(n).toLocaleString('en', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+function parseDateSafe(dateStr) {
+  if (!dateStr) return null;
+  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+}
+
+function fmtDate(dateStr, opts) {
+  const d = parseDateSafe(dateStr);
+  if (!d) return dateStr || '—';
+  return d.toLocaleDateString('en-GB', opts || { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function setupDatePicker() {
+  const picker = document.getElementById('datePicker');
+  const today = TODAY_ISO();
+  picker.value = today;
+  picker.max = today;
+  // Allow going back up to 2 years
+  const minDate = new Date();
+  minDate.setFullYear(minDate.getFullYear() - 2);
+  picker.min = minDate.toISOString().slice(0, 10);
+}
+
+function resetToToday() {
+  document.getElementById('datePicker').value = TODAY_ISO();
+  loadData();
+}
+
+/* =========================================================
+   DATA FETCHING
+   Uses gold-api.com (free, CORS-enabled, no key) for spot price
+   Uses open.er-api.com for FX rates
+   ========================================================= */
+
+async function fetchGoldSpot(dateStr) {
+  // gold-api.com supports dates via ?date=YYYYMMDD
+  // For TODAY, use the simple endpoint
+  const isToday = dateStr === TODAY_ISO();
+
+  const urls = isToday
+    ? [
+        'https://api.gold-api.com/price/XAU',
+      ]
+    : [
+        // Historical — gold-api.com date format
+        `https://api.gold-api.com/price/XAU/${dateStr.replace(/-/g, '')}`,
+      ];
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const j = await res.json();
+      if (j.price && j.price > 100) return { usdPerOz: j.price, source: 'gold-api.com' };
+    } catch {}
+  }
+
+  // Fallback for historical: use fawaz community CDN
+  try {
+    const url = dateStr === TODAY_ISO()
+      ? 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json'
+      : `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/xau.json`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const j = await res.json();
+      if (j.xau?.usd && j.xau.usd > 100) return { usdPerOz: j.xau.usd, source: 'fawazahmed0 CDN' };
+    }
+  } catch {}
+
+  return null;
+}
+
+async function fetchFX(dateStr) {
+  const isToday = dateStr === TODAY_ISO();
+
+  // Primary: open.er-api.com (only has today)
+  if (isToday) {
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD');
+      const j = await res.json();
+      if (j.rates?.MYR && j.rates?.INR) return { usdToMyr: j.rates.MYR, usdToInr: j.rates.INR, source: 'er-api.com' };
+    } catch {}
+  }
+
+  // Historical via frankfurter.app (has full history from 1999)
+  try {
+    const url = isToday
+      ? 'https://api.frankfurter.app/latest?from=USD&to=MYR,INR'
+      : `https://api.frankfurter.app/${dateStr}?from=USD&to=MYR,INR`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const j = await res.json();
+      if (j.rates?.MYR && j.rates?.INR) return { usdToMyr: j.rates.MYR, usdToInr: j.rates.INR, source: 'frankfurter.app' };
+    }
+  } catch {}
+
+  // Fallback
+  try {
+    const url = isToday
+      ? 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
+      : `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/usd.json`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const j = await res.json();
+      if (j.usd?.myr && j.usd?.inr) return { usdToMyr: j.usd.myr, usdToInr: j.usd.inr, source: 'fawazahmed0 CDN' };
+    }
+  } catch {}
+
+  return { usdToMyr: 3.97, usdToInr: 92.61, source: 'cached fallback' };
+}
+
+async function loadData() {
+  const loader = document.getElementById('loader');
+  const content = document.getElementById('content');
+  const warning = document.getElementById('warningBanner');
+  const info = document.getElementById('infoBanner');
+  const btn = document.getElementById('refreshBtn');
+
+  const picker = document.getElementById('datePicker');
+  const dateStr = picker.value || TODAY_ISO();
+
+  btn.disabled = true;
+  btn.textContent = '↻ Loading';
+  loader.classList.remove('hidden');
+  content.classList.add('hidden');
+  warning.classList.add('hidden');
+  info.classList.add('hidden');
+
+  const isToday = dateStr === TODAY_ISO();
+  document.getElementById('loadingText').textContent = isToday
+    ? 'Fetching live rates…'
+    : `Fetching rates for ${fmtDate(dateStr)}…`;
+
+  const [goldResult, fxResult] = await Promise.all([
+    fetchGoldSpot(dateStr),
+    fetchFX(dateStr),
+  ]);
+
+  if (!goldResult) {
+    document.getElementById('warningText').textContent =
+      `Could not fetch gold price for ${fmtDate(dateStr)}. Try a different date or refresh.`;
+    warning.classList.remove('hidden');
+    loader.classList.add('hidden');
+    btn.disabled = false;
+    btn.textContent = '↻ Refresh';
+    return;
+  }
+
+  // Build per-city INR rates (retail = spot × purity × FX × city markup)
+  const basePerGramMYR = (goldResult.usdPerOz / GRAMS_PER_OZ) * PURITY_22K * fxResult.usdToMyr;
+  const basePerGramINR = (goldResult.usdPerOz / GRAMS_PER_OZ) * PURITY_22K * fxResult.usdToInr;
+
+  const india = {};
+  Object.keys(CITY_MARKUPS).forEach(key => {
+    india[key] = {
+      label: key.charAt(0).toUpperCase() + key.slice(1),
+      perGramINR: basePerGramINR * CITY_MARKUPS[key],
+    };
+  });
+
+  cachedData = {
+    date: dateStr,
+    isLive: isToday,
+    goldSpotUSD: goldResult.usdPerOz,
+    goldSource: goldResult.source,
+    fxSource: fxResult.source,
+    usdToMyr: fxResult.usdToMyr,
+    usdToInr: fxResult.usdToInr,
+    inrToMyr: fxResult.usdToMyr / fxResult.usdToInr,
+    india,
+    malaysiaPerGramMYR: basePerGramMYR * MY_MARKUP,
+  };
+
+  renderFromCache();
+  btn.disabled = false;
+  btn.textContent = '↻ Refresh';
+}
+
+function renderFromCache() {
+  if (!cachedData) return;
+  const d = cachedData;
+  const loader = document.getElementById('loader');
+  const content = document.getElementById('content');
+  const info = document.getElementById('infoBanner');
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+
+  const city = document.getElementById('citySelect').value;
+  const cityData = d.india[city];
+  const cityLabel = cityData.label;
+  const indianINR = cityData.perGramINR;
+  const myMYR = d.malaysiaPerGramMYR;
+
+  if (d.isLive) {
+    dot.className = 'status-dot';
+    statusText.textContent = `Live · ${fmtDate(d.date, { weekday: 'short', day: 'numeric', month: 'short' })}`;
+  } else {
+    dot.className = 'status-dot history';
+    statusText.textContent = `Historical · ${fmtDate(d.date)}`;
+    info.classList.remove('hidden');
+    document.getElementById('infoText').textContent =
+      `Viewing rates from ${fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`;
+  }
+
+  document.getElementById('thIndia').textContent = `${cityLabel} (INR)`;
+  document.getElementById('thIndiaMyr').textContent = `${cityLabel} in MYR`;
+
+  const indianInMYR = indianINR * d.inrToMyr;
+  const diffG = myMYR - indianInMYR;
+  const diffGINR = diffG / d.inrToMyr;
+  const diffColor = diffG >= 0 ? '#b4e080' : '#c0b8f0';
+  const diffLabel = diffG > 0.5 ? 'Malaysia is pricier' : diffG < -0.5 ? `${cityLabel} is pricier` : 'Same price';
+
+  document.getElementById('summary').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label"><span class="flag">🇮🇳</span>${cityLabel}</div>
+      <div class="stat-value" style="color:#9cc3e8">₹${fmt(indianINR)}<span class="stat-unit">/g</span></div>
+      <div class="stat-sub">22KT · retail estimate</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><span class="flag">🇲🇾</span>Malaysia</div>
+      <div class="stat-value" style="color:#f0b155">RM${fmt(myMYR)}<span class="stat-unit">/g</span></div>
+      <div class="stat-sub">22KT · retail estimate</div>
+    </div>
+    <div class="stat-card full">
+      <div class="stat-label">Difference / gram</div>
+      <div class="stat-value" style="color:${diffColor}">${diffG >= 0 ? '+' : ''}RM ${fmt(diffG)}</div>
+      <div class="diff-secondary">${diffGINR >= 0 ? '+' : ''}₹ ${fmt(diffGINR)}</div>
+      <div class="stat-sub">${diffLabel}</div>
+    </div>
+  `;
+
+  const shortDate = fmtDate(d.date, { day: '2-digit', month: 'short', year: 'numeric' });
+  const shortDateM = fmtDate(d.date, { day: '2-digit', month: 'short' });
+
+  document.getElementById('tbody').innerHTML = UNITS.map(u => {
+    const myV = myMYR * u.mul;
+    const inV = indianINR * u.mul;
+    const inM = indianInMYR * u.mul;
+    const diff = myV - inM;
+    const diffINR = diff / d.inrToMyr;
+    const abs = Math.abs(diff);
+    const absINR = Math.abs(diffINR);
+    const cls = diff > 0.5 ? 'pill pill-my' : diff < -0.5 ? 'pill pill-in' : 'pill pill-eq';
+    const prefix = diff > 0.5 ? 'MY +' : diff < -0.5 ? 'IN +' : '';
+    const lbl = Math.abs(diff) < 0.5
+      ? '≈ equal'
+      : `${prefix}RM ${fmt(abs)}<span class="pill-inr-hint">₹ ${fmt(absINR)}</span>`;
+    return `<tr>
+      <td style="color:#555550;font-size:12px">${shortDate}</td>
+      <td style="color:#b4b2a9;font-weight:600">${u.label}</td>
+      <td style="color:#9cc3e8;font-weight:700">₹ ${fmt(inV)}</td>
+      <td style="color:#f0b155;font-weight:700">RM ${fmt(myV)}</td>
+      <td style="color:#7dd8ac;font-size:13px">RM ${fmt(inM)}</td>
+      <td><span class="${cls}">${lbl}</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('mobileList').innerHTML = UNITS.map(u => {
+    const myV = myMYR * u.mul;
+    const inV = indianINR * u.mul;
+    const inM = indianInMYR * u.mul;
+    const diff = myV - inM;
+    const diffINR = diff / d.inrToMyr;
+    const abs = Math.abs(diff);
+    const absINR = Math.abs(diffINR);
+    const cls = diff > 0.5 ? 'pill pill-my' : diff < -0.5 ? 'pill pill-in' : 'pill pill-eq';
+    const prefix = diff > 0.5 ? 'MY +' : diff < -0.5 ? 'IN +' : '';
+    const diffText = Math.abs(diff) < 0.5
+      ? '≈ equal'
+      : `${prefix}RM ${fmt(abs)}<span class="pill-inr-hint">₹ ${fmt(absINR)}</span>`;
+    return `<div class="unit-card">
+      <div class="unit-header">
+        <span class="unit-name">${u.label}</span>
+        <span class="unit-date">${shortDateM}</span>
+      </div>
+      <div class="unit-row">
+        <span class="unit-label"><span class="flag">🇮🇳</span>${cityLabel}</span>
+        <span class="unit-value" style="color:#9cc3e8">₹ ${fmt(inV)}</span>
+      </div>
+      <div class="unit-row">
+        <span class="unit-label"><span class="flag">🇲🇾</span>Malaysia</span>
+        <span class="unit-value" style="color:#f0b155">RM ${fmt(myV)}</span>
+      </div>
+      <div class="unit-row">
+        <span class="unit-label">India in MYR</span>
+        <span class="unit-value" style="color:#7dd8ac;font-size:14px">RM ${fmt(inM)}</span>
+      </div>
+      <div class="unit-diff">
+        <span class="unit-label">Difference</span>
+        <span class="${cls}">${diffText}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('sourcesNote').textContent =
+    `Gold: ${d.goldSource} · FX: ${d.fxSource} · Retail markup applied (~5%)`;
+  document.getElementById('updatedNote').textContent =
+    `Spot: $${fmt(d.goldSpotUSD)}/oz · 1 INR = RM ${fmt(d.inrToMyr, 5)}`;
+
+  loader.classList.add('hidden');
+  content.classList.remove('hidden');
+}
+
+setupDatePicker();
+loadData();
+</script>
+</body>
+</html>
