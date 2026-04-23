@@ -129,6 +129,9 @@ async function fetchFX() {
 }
 
 export default async function handler(request) {
+  const url = new URL(request.url);
+  const noCache = url.searchParams.has('nocache');
+
   const [delhi, malaysia, fx] = await Promise.allSettled([
     scrapeDelhi(),
     scrapeMalaysia(),
@@ -178,7 +181,9 @@ export default async function handler(request) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400',
+      'Cache-Control': noCache
+        ? 'no-cache, no-store, must-revalidate'
+        : 'public, s-maxage=3600, stale-while-revalidate=7200',
     },
   });
 }
