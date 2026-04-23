@@ -57,12 +57,10 @@ async function scrapeMalaysia() {
       url: 'https://rates.goldenchennai.com/malaysia-gold-rate-today/',
       name: 'goldenchennai.com',
       patterns: [
-        // Table row: "1g | MYR 579.00 | ..." — first MYR value in 1g row is 22KT
-        /1g\s*[|<\/td>\s]*(?:<[^>]*>)*\s*MYR\s*([\d,]+(?:\.\d+)?)/i,
+        // Table row: "<td>1g</td><td>MYR 579.00</td>" — match across HTML tags
+        /1g[\s\S]{0,150}?MYR\s*([\d,]+(?:\.\d+)?)/i,
         // Trend text: "Market 22 Carat Gold rate today in Malaysia is MYR 579.00 per Gram"
-        /Market\s*22\s*Carat\s*Gold\s*rate\s*today\s*in\s*Malaysia\s*is\s*MYR\s*([\d,]+(?:\.\d+)?)/i,
-        // Fallback: "22 Carat Gold rate today in Malaysia is MYR ..."
-        /22\s*(?:Carat|Karat)\s*Gold\s*rate\s*today\s*in\s*Malaysia\s*is\s*MYR\s*([\d,]+(?:\.\d+)?)/i,
+        /22\s*Carat\s*Gold\s*rate\s*today\s*in\s*Malaysia\s*is\s*MYR\s*([\d,]+(?:\.\d+)?)/i,
       ],
     },
     {
