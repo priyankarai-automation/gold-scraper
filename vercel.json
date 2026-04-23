@@ -1,5 +1,8 @@
 {
   "rewrites": [
     { "source": "/", "destination": "/index.html" }
-  ]
+  ],
+  "env": {
+    "GITHUB_REPO": "priyankarai-automation/gold-scraper"
+  }
 }
