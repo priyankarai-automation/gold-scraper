@@ -583,7 +583,7 @@ function renderFromCache() {
       `Actual scraped retail rates · 1 INR = RM ${fmt(d.inrToMyr, 5)}`;
   } else {
     document.getElementById('sourcesNote').textContent =
-      `Gold: ${d.goldSource} · FX: ${d.fxSource} · Retail markup applied (~5%)`;
+      `Gold: ${d.goldSource} · FX: ${d.fxSource}`;
     document.getElementById('updatedNote').textContent =
       `Spot: $${fmt(d.goldSpotUSD)}/oz · 1 INR = RM ${fmt(d.inrToMyr, 5)}`;
   }
